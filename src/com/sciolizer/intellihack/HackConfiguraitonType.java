@@ -1,5 +1,6 @@
 package com.sciolizer.intellihack;
 
+import com.intellij.execution.DefaultExecutionResult;
 import com.intellij.execution.ExecutionException;
 import com.intellij.execution.ExecutionResult;
 import com.intellij.execution.Executor;
@@ -9,7 +10,6 @@ import com.intellij.execution.runners.ExecutionEnvironment;
 import com.intellij.execution.runners.ProgramRunner;
 import com.intellij.execution.ui.ExecutionConsole;
 import com.intellij.icons.AllIcons;
-import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.options.ConfigurationException;
 import com.intellij.openapi.options.SettingsEditor;
@@ -96,86 +96,78 @@ public class HackConfiguraitonType extends ConfigurationTypeBase {
                 @Nullable
                 @Override
                 public ExecutionResult execute(Executor executor, @NotNull ProgramRunner runner) throws ExecutionException {
-                    return new ExecutionResult() {
+                    System.out.println("execute was called");
+                    // todo: try using ConsoleViewImpl instead
+                    ExecutionConsole executionConsole = new ExecutionConsole() {
+
+                        JPanel panel = new JPanel();
+
                         @Override
-                        public ExecutionConsole getExecutionConsole() {
-                            return new ExecutionConsole() {
-
-                                JPanel panel = new JPanel();
-
-                                @Override
-                                public JComponent getComponent() {
-                                    return panel;
-                                }
-
-                                @Override
-                                public JComponent getPreferredFocusableComponent() {
-                                    return panel;
-                                }
-
-                                @Override
-                                public void dispose() { }
-                            };
+                        public JComponent getComponent() {
+                            return panel;
                         }
 
                         @Override
-                        public AnAction[] getActions() {
-                            return new AnAction[0];
+                        public JComponent getPreferredFocusableComponent() {
+                            return panel;
                         }
 
                         @Override
-                        public ProcessHandler getProcessHandler() {
-                            class HackProcessHandler extends ProcessHandler {
-                                @Override
-                                protected void destroyProcessImpl() {
-
-                                }
-
-                                @Override
-                                protected void detachProcessImpl() {
-
-                                }
-
-                                @Override
-                                public boolean detachIsDefault() {
-                                    return true;
-                                }
-
-                                @Nullable
-                                @Override
-                                public OutputStream getProcessInput() {
-                                    return System.out;
-                                }
-
-                                @Override
-                                public void startNotify() {
-                                    HackClassLoader hackClassLoader = new HackClassLoader(getProject());
-                                    Class thing;
-                                    try {
-                                        thing = hackClassLoader.findClass(runnableClass);
-                                    } catch (ClassNotFoundException e) {
-                                        throw new RuntimeException(e);
-                                    }
-                                    Object o;
-                                    try {
-                                        o = thing.newInstance();
-                                    } catch (InstantiationException e) {
-                                        throw new RuntimeException(e);
-                                    } catch (IllegalAccessException e) {
-                                        throw new RuntimeException(e);
-                                    }
-                                    ((Runnable) o).run();
-                                }
-                            }
-                            return new HackProcessHandler();
-                        }
+                        public void dispose() { }
                     };
+                    class HackProcessHandler extends ProcessHandler {
+                        @Override
+                        protected void destroyProcessImpl() {
+                            System.out.println("destroyProcessImpl was called");
+                        }
+
+                        @Override
+                        protected void detachProcessImpl() {
+                            System.out.println("detachProcessImpl was called");
+                        }
+
+                        @Override
+                        public boolean detachIsDefault() {
+                            System.out.println("detachIsDefault was called");
+                            return true;
+                        }
+
+                        @Nullable
+                        @Override
+                        public OutputStream getProcessInput() {
+                            System.out.println("getProcessInput was called");
+                            return System.out;
+                        }
+
+                        @Override
+                        public void startNotify() {
+                            System.out.println("startNotify was called");
+                            HackClassLoader hackClassLoader = new HackClassLoader(getProject());
+                            Class thing;
+                            try {
+                                thing = hackClassLoader.findClass(runnableClass);
+                            } catch (ClassNotFoundException e) {
+                                throw new RuntimeException(e);
+                            }
+                            Object o;
+                            try {
+                                o = thing.newInstance();
+                            } catch (InstantiationException e) {
+                                throw new RuntimeException(e);
+                            } catch (IllegalAccessException e) {
+                                throw new RuntimeException(e);
+                            }
+                            ((Runnable) o).run();
+                        }
+                    }
+                    return new DefaultExecutionResult(executionConsole, new HackProcessHandler());
                 }
             };
         }          //  */
 
     }
 
+    // todo: is there any point to this class?
     private static class HackRunConfigurationModule extends RunConfigurationModule {
         private HackRunConfigurationModule(Project project) {
             super(project);
