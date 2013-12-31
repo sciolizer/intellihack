@@ -1,6 +1,5 @@
 package com.sciolizer.intellihack;
 
-import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.module.ModuleManager;
 import com.intellij.openapi.project.Project;
@@ -8,38 +7,15 @@ import com.intellij.openapi.roots.*;
 import com.intellij.openapi.vfs.VirtualFile;
 
 import java.io.IOException;
-import java.net.MalformedURLException;
-import java.net.URL;
 
-// First created by Joshua Ball on 12/30/13 at 11:07 PM
+// Adapted from Rob Nielson's HotPlugin
 public class HackClassLoader extends ClassLoader {
-    private Logger logger = Logger.getInstance(getClass().getName());
     private Project project;
 
     public HackClassLoader(Project project) {
         super(HackClassLoader.class.getClassLoader());
         this.project = project;
 
-    }
-
-    public String getUrlString(VirtualFile file) {
-        if (file.getPath().indexOf(".jar!/") != -1) {
-            return "jar:file:" + file.getPath();
-        }
-        return file.getUrl();
-    }
-
-    protected URL findResource(String path) {
-        VirtualFile file = getVirtualFile(path);
-        if (file != null) {
-            try {
-                String urlString = getUrlString(file);
-                return new URL(urlString);
-            } catch (MalformedURLException e) {
-                throw new RuntimeException(e);
-            }
-        }
-        return null;
     }
 
     protected Class findClass(String cla) throws ClassNotFoundException {
