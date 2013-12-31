@@ -38,7 +38,7 @@
 
   <extensions defaultExtensionNs="com.intellij">
     <configurationType implementation="com.sciolizer.intellihack.HackConfiguraitonType"/>
-    <programRunner implementation="com.sciolizer.intellihack.HackProgramRunner"/>
+    <!--<programRunner implementation="com.sciolizer.intellihack.HackProgramRunner"/>-->
     <!-- Add your extensions here -->
   </extensions>
 </idea-plugin>
