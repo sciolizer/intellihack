@@ -37,10 +37,36 @@ public class HackConfiguraitonType extends ConfigurationTypeBase {
     public class HackRunProfile extends ModuleBasedConfiguration<HackRunConfigurationModule> {
 
         private String runnableClass = "";
-        private final HackSettingsEditor hackSettingsEditor = new HackSettingsEditor();
+        private final SettingsEditor<HackRunProfile> hackSettingsEditor = new SettingsEditor<HackRunProfile>() {
+            private final JPanel jPanel = new JPanel();
+            private final JTextArea jTextArea = new JTextArea();
+
+            {
+                JLabel jLabel = new JLabel("Runnable class:");
+                jPanel.setLayout(new BoxLayout(jPanel, BoxLayout.X_AXIS));
+                jPanel.add(jLabel);
+                jPanel.add(jTextArea);
+            }
+
+            @Override
+            protected void resetEditorFrom(HackRunProfile s) {
+                jTextArea.setText(s.runnableClass);
+            }
+
+            @Override
+            protected void applyEditorTo(HackRunProfile s) throws ConfigurationException {
+                String text = jTextArea.getText();
+                s.runnableClass = text;
+            }
+
+            @NotNull
+            @Override
+            protected JComponent createEditor() {
+                return jPanel;
+            }
+        };
 
         public HackRunProfile(Project project, ConfigurationFactory configurationFactory) {
-//            super(project, configurationFactory, "hack");
             super(new HackRunConfigurationModule(project), configurationFactory);
         }
 
@@ -156,37 +182,4 @@ public class HackConfiguraitonType extends ConfigurationTypeBase {
         }
     }
 
-    private static class HackSettingsEditor extends SettingsEditor<HackRunProfile> {
-
-        private final JPanel jPanel;
-        private final JTextArea jTextArea;
-
-        public HackSettingsEditor() {
-            jTextArea = new JTextArea();
-
-            JLabel jLabel = new JLabel("Runnable class:");
-
-            jPanel = new JPanel();
-            jPanel.setLayout(new BoxLayout(jPanel, BoxLayout.X_AXIS));
-            jPanel.add(jLabel);
-            jPanel.add(jTextArea);
-        }
-
-        @Override
-        protected void resetEditorFrom(HackRunProfile s) {
-            jTextArea.setText(s.runnableClass);
-        }
-
-        @Override
-        protected void applyEditorTo(HackRunProfile s) throws ConfigurationException {
-            String text = jTextArea.getText();
-            s.runnableClass = text;
-        }
-
-        @NotNull
-        @Override
-        protected JComponent createEditor() {
-            return jPanel;
-        }
-    }
 }
