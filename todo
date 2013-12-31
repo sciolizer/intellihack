@@ -1,0 +1,8 @@
+
+fix context runner
+injection of other stuff? (logger, module, extension points?)
+file creation recipe - creates file that already implements AutoCloseable and Runnable, and expects injected arguments
+change run configuration ui layout to look nicer - see ApplicationConfigurable for examples
+
+v2:
+automatic registering and unregistering of extension points
