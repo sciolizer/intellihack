@@ -10,6 +10,7 @@ import com.intellij.execution.runners.ProgramRunner;
 import com.intellij.execution.ui.ExecutionConsole;
 import com.intellij.icons.AllIcons;
 import com.intellij.openapi.actionSystem.AnAction;
+import com.intellij.openapi.module.Module;
 import com.intellij.openapi.options.ConfigurationException;
 import com.intellij.openapi.options.SettingsEditor;
 import com.intellij.openapi.project.Project;
@@ -18,10 +19,11 @@ import org.jetbrains.annotations.Nullable;
 
 import javax.swing.*;
 import java.io.OutputStream;
+import java.util.Collection;
 
 // First created by Joshua Ball on 12/30/13 at 10:02 PM
 public class HackConfiguraitonType extends ConfigurationTypeBase {
-    public static final String ID = "com.sciolizer.intellihack";
+    public static final String ID = "Application"; // "com.sciolizer.intellihack";
     public HackConfiguraitonType() {
         super(ID, "IntelliHack", "Runs arbitrary code in the same jvm as IntelliJ", AllIcons.Debugger.StackFrame);
         addFactory(new ConfigurationFactory(this) {
@@ -32,44 +34,38 @@ public class HackConfiguraitonType extends ConfigurationTypeBase {
         });
     }
 
-    public class HackRunProfile extends LocatableConfigurationBase {
+    public class HackRunProfile extends ModuleBasedConfiguration<HackRunConfigurationModule> {
+
+        private String runnableClass = "";
+        private final HackSettingsEditor hackSettingsEditor = new HackSettingsEditor();
+
         public HackRunProfile(Project project, ConfigurationFactory configurationFactory) {
-            super(project, configurationFactory, "hack");
+//            super(project, configurationFactory, "hack");
+            super(new HackRunConfigurationModule(project), configurationFactory);
+        }
+
+        @Override
+        public Collection<Module> getValidModules() {
+            return JavaRunConfigurationModule.getModulesForClass(getProject(), runnableClass);
         }
 
         @NotNull
         @Override
-        public SettingsEditor<HackRunProfile> getConfigurationEditor() {
-            return new SettingsEditor<HackRunProfile>() {
-                @Override
-                protected void resetEditorFrom(HackRunProfile s) {
+        public SettingsEditor<? extends RunConfiguration> getConfigurationEditor() {
+            return hackSettingsEditor;
+        }
 
-                }
-
-                @Override
-                protected void applyEditorTo(HackRunProfile s) throws ConfigurationException {
-
-                }
-
-                @NotNull
-                @Override
-                protected JComponent createEditor() {
-                    return new JPanel();
-                }
-            };
+        @Override
+        public HackRunProfile clone() {
+            HackRunProfile clone = (HackRunProfile) super.clone();
+            clone.runnableClass = runnableClass;
+            return clone;
         }
 
         @Nullable
         @Override
         public RunProfileState getState(@NotNull Executor executor, @NotNull ExecutionEnvironment env) throws ExecutionException {
-//                        return new JavaCommandLineState(env) {
-//                            @Override
-//                            protected JavaParameters createJavaParameters() throws ExecutionException {
-//                                JavaParameters javaParameters = new JavaParameters();
-//                                javaParameters.configureByProject(project, JavaParameters.JDK_AND_CLASSES, env.getProject().);
-//                                return javaParameters;
-//                            }
-//                        };
+            System.out.println("getState was called");
             return new RunProfileState() {
                 @Nullable
                 @Override
@@ -130,7 +126,7 @@ public class HackConfiguraitonType extends ConfigurationTypeBase {
                                     HackClassLoader hackClassLoader = new HackClassLoader(getProject());
                                     Class thing;
                                     try {
-                                        thing = hackClassLoader.findClass("Thing");
+                                        thing = hackClassLoader.findClass(runnableClass);
                                     } catch (ClassNotFoundException e) {
                                         throw new RuntimeException(e);
                                     }
@@ -150,6 +146,47 @@ public class HackConfiguraitonType extends ConfigurationTypeBase {
                     };
                 }
             };
+        }          //  */
+
+    }
+
+    private static class HackRunConfigurationModule extends RunConfigurationModule {
+        private HackRunConfigurationModule(Project project) {
+            super(project);
+        }
+    }
+
+    private static class HackSettingsEditor extends SettingsEditor<HackRunProfile> {
+
+        private final JPanel jPanel;
+        private final JTextArea jTextArea;
+
+        public HackSettingsEditor() {
+            jTextArea = new JTextArea();
+
+            JLabel jLabel = new JLabel("Runnable class:");
+
+            jPanel = new JPanel();
+            jPanel.setLayout(new BoxLayout(jPanel, BoxLayout.X_AXIS));
+            jPanel.add(jLabel);
+            jPanel.add(jTextArea);
+        }
+
+        @Override
+        protected void resetEditorFrom(HackRunProfile s) {
+            jTextArea.setText(s.runnableClass);
+        }
+
+        @Override
+        protected void applyEditorTo(HackRunProfile s) throws ConfigurationException {
+            String text = jTextArea.getText();
+            s.runnableClass = text;
+        }
+
+        @NotNull
+        @Override
+        protected JComponent createEditor() {
+            return jPanel;
         }
     }
 }
