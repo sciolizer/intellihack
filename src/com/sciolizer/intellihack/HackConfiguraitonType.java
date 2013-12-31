@@ -23,7 +23,7 @@ import java.util.Collection;
 
 // First created by Joshua Ball on 12/30/13 at 10:02 PM
 public class HackConfiguraitonType extends ConfigurationTypeBase {
-    public static final String ID = "Application"; // "com.sciolizer.intellihack";
+    public static final String ID = "com.sciolizer.intellihack";
     public HackConfiguraitonType() {
         super(ID, "IntelliHack", "Runs arbitrary code in the same jvm as IntelliJ", AllIcons.Debugger.StackFrame);
         addFactory(new ConfigurationFactory(this) {
