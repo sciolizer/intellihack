@@ -18,9 +18,9 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.ComboBox;
 import com.intellij.openapi.util.InvalidDataException;
 import com.intellij.openapi.util.WriteExternalException;
-import com.intellij.psi.JavaPsiFacade;
-import com.intellij.psi.PsiClass;
+import com.intellij.psi.*;
 import com.intellij.psi.search.GlobalSearchScope;
+import com.intellij.refactoring.listeners.RefactoringElementListener;
 import org.jdom.Element;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -43,7 +43,7 @@ public class HackConfiguraitonType extends ConfigurationTypeBase {
         });
     }
 
-    public class HackRunProfile extends ModuleBasedConfiguration<HackRunConfigurationModule> {
+    public class HackRunProfile extends ModuleBasedConfiguration<HackRunConfigurationModule> implements RefactoringListenerProvider {
 
         private String runnableClass = "";
         private final SettingsEditor<HackRunProfile> hackSettingsEditor = new SettingsEditor<HackRunProfile>() {
@@ -156,6 +156,37 @@ public class HackConfiguraitonType extends ConfigurationTypeBase {
             HackRunProfile clone = (HackRunProfile) super.clone();
             clone.runnableClass = runnableClass;
             return clone;
+        }
+
+        @Nullable
+        @Override
+        public RefactoringElementListener getRefactoringElementListener(PsiElement element) {
+            String fqn = getFullyQualifiedName(element);
+            if (fqn == null) return null;
+            return new RefactoringElementListener() {
+                @Override
+                public void elementMoved(@NotNull PsiElement newElement) {
+                    runnableClass = getFullyQualifiedName(newElement);
+                }
+
+                @Override
+                public void elementRenamed(@NotNull PsiElement newElement) {
+                    runnableClass = getFullyQualifiedName(newElement);
+                }
+            };
+        }
+
+        private String getFullyQualifiedName(PsiElement element) {
+            if (!(element instanceof PsiClass)) return null;
+            PsiClass psiClass = (PsiClass) element;
+            PsiIdentifier classIdentifier = psiClass.getNameIdentifier();
+            if (classIdentifier == null) return null;
+            String text = classIdentifier.getText();
+            PsiJavaFile javaFile = (PsiJavaFile) psiClass.getContainingFile();
+            PsiPackage pkg = JavaPsiFacade.getInstance(getProject()).findPackage(javaFile.getPackageName());
+            if (pkg == null) return null;
+            String packageName = pkg.getQualifiedName();
+            return packageName + (packageName.isEmpty() ? "" : '.') + text;
         }
 
         @Nullable
