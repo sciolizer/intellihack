@@ -1,17 +1,59 @@
 <idea-plugin version="2">
   <id>com.sciolizer.intellihack</id>
-  <name>Plugin display name here</name>
-  <version>1.0</version>
-  <vendor email="support@yourcompany.com" url="http://www.yourcompany.com">YourCompany</vendor>
+  <name>IntelliHack</name>
+  <version>0.1</version>
+  <vendor email="joshbball@gmail.com" url="http://sciolizer.com">Joshua Ball</vendor>
 
   <description><![CDATA[
-      Enter short description for your plugin here.<br>
-      <small>most HTML tags may be used</small>
+      Loads and executes a class from within the IntelliJ process, instead of spawning a new process.
+      The advantage is that plugin code can be tested without spawning a new IntelliJ process.
+
+      Example:
+
+      <pre>
+package example;
+
+import com.intellij.execution.ui.ConsoleView;
+import com.intellij.execution.ui.ConsoleViewContentType;
+import com.intellij.openapi.project.Project;
+
+import java.util.concurrent.CountDownLatch;
+
+public class TryMe implements Runnable, AutoCloseable {
+
+    private final ConsoleView consoleView;
+    private final CountDownLatch countDownLatch = new CountDownLatch(1);
+
+    public TryMe(ConsoleView consoleView, Project project) {
+        this.consoleView = consoleView;
+    }
+
+    @Override
+    public void run() {
+        consoleView.print("Hello in the console view\n", ConsoleViewContentType.NORMAL_OUTPUT);
+        try {
+            countDownLatch.await();
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+        consoleView.print("Countdownlatch awaiting finished\n", ConsoleViewContentType.NORMAL_OUTPUT);
+    }
+
+    // Will be called when the Stop button is pressed.
+    @Override
+    public void close() throws Exception {
+        countDownLatch.countDown();
+    }
+}
+</pre>
+      Implementing Runnable is mandatory. Implementing AutoCloseable is optional. Constructor arguments
+      are also optional.
+
+      To test this example, copy the file to an IntelliJ plugin project, add an IntelliHack runtime configuration,
+      and set the runnable class to example.TryMe.
       ]]></description>
 
   <change-notes><![CDATA[
-      Add change notes here.<br>
-      <small>most HTML tags may be used</small>
       ]]>
   </change-notes>
 
@@ -39,7 +81,5 @@
   <extensions defaultExtensionNs="com.intellij">
     <configurationType implementation="com.sciolizer.intellihack.HackConfigurationType"/>
     <runConfigurationProducer implementation="com.sciolizer.intellihack.HackRunConfigurationProducer"/>
-    <!--<programRunner implementation="com.sciolizer.intellihack.HackProgramRunner"/>-->
-    <!-- Add your extensions here -->
   </extensions>
 </idea-plugin>
