@@ -40,6 +40,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -214,13 +215,26 @@ public class HackConfigurationType extends ConfigurationTypeBase {
                     // todo: try using ConsoleViewImpl instead
                     final ConsoleView console = myConsoleBuilder.getConsole();
                     class HackProcessHandler extends ProcessHandler {
+
+                        private StoppableRunnable stoppableRunnable;
+
                         @Override
                         protected void destroyProcessImpl() {
+                            try {
+                                stoppableRunnable.close();
+                            } catch (Exception e) {
+                                throw new RuntimeException(e);
+                            }
                             System.out.println("destroyProcessImpl was called");
                         }
 
                         @Override
                         protected void detachProcessImpl() {
+                            try {
+                                stoppableRunnable.close();
+                            } catch (Exception e) {
+                                throw new RuntimeException(e);
+                            }
                             System.out.println("detachProcessImpl was called");
                         }
 
@@ -240,61 +254,83 @@ public class HackConfigurationType extends ConfigurationTypeBase {
                         @Override
                         public void startNotify() {
                             super.startNotify();
-                            HackConfigurationType.this.executor.execute(new Runnable() {
-                                @Override
-                                public void run() {
-                                    boolean errorFree = false;
+                            HackConfigurationType.this.executor.execute(stoppableRunnable = new StoppableRunnable(console));
+                        }
+
+                        class StoppableRunnable implements Runnable, AutoCloseable {
+                            private final ConsoleView console;
+                            private final CountDownLatch runnableCreatedOrError = new CountDownLatch(1);
+                            private Runnable runnable;
+
+                            public StoppableRunnable(ConsoleView console) {
+                                this.console = console;
+                            }
+
+                            @Override
+                            public void close() throws Exception {
+                                runnableCreatedOrError.await();
+                                if (runnable == null) return;
+                                if (runnable instanceof AutoCloseable) {
+                                    ((AutoCloseable)runnable).close();
+                                }
+                            }
+
+                            @Override
+                            public void run() {
+                                boolean errorFree = false;
+                                try {
+                                    HackClassLoader hackClassLoader = new HackClassLoader(getProject());
+                                    Class thing;
                                     try {
-                                        HackClassLoader hackClassLoader = new HackClassLoader(getProject());
-                                        Class thing;
+                                        thing = hackClassLoader.findClass(runnableClass);
+                                    } catch (ClassNotFoundException e) {
+                                        throw new RuntimeException(e);
+                                    }
+                                    Object o = null;
+                                    outer: for (Constructor constructor : thing.getConstructors()) {
+                                        List<Object> objects = new ArrayList<Object>(constructor.getParameterTypes().length);
+                                        for (Class parameterType : constructor.getParameterTypes()) {
+                                            if (parameterType.equals(ConsoleView.class)) {
+                                                objects.add(console);
+                                            } else if (parameterType.equals(Project.class)) {
+                                                objects.add(getProject());
+                                            } else {
+                                                continue outer;
+                                            }
+                                        }
+                                        Object[] initArgs = objects.toArray();
                                         try {
-                                            thing = hackClassLoader.findClass(runnableClass);
-                                        } catch (ClassNotFoundException e) {
+                                            o = constructor.newInstance(initArgs);
+                                        } catch (InstantiationException e) {
+                                            throw new RuntimeException(e);
+                                        } catch (IllegalAccessException e) {
+                                            throw new RuntimeException(e);
+                                        } catch (InvocationTargetException e) {
                                             throw new RuntimeException(e);
                                         }
-                                        Object o = null;
-                                        outer: for (Constructor constructor : thing.getConstructors()) {
-                                            List<Object> objects = new ArrayList<Object>(constructor.getParameterTypes().length);
-                                            for (Class parameterType : constructor.getParameterTypes()) {
-                                                if (parameterType.equals(ConsoleView.class)) {
-                                                    objects.add(console);
-                                                } else if (parameterType.equals(Project.class)) {
-                                                    objects.add(getProject());
-                                                } else {
-                                                    continue outer;
-                                                }
-                                            }
-                                            Object[] initArgs = objects.toArray();
-                                            try {
-                                                o = constructor.newInstance(initArgs);
-                                            } catch (InstantiationException e) {
-                                                throw new RuntimeException(e);
-                                            } catch (IllegalAccessException e) {
-                                                throw new RuntimeException(e);
-                                            } catch (InvocationTargetException e) {
-                                                throw new RuntimeException(e);
-                                            }
-                                            break;
-                                        }
-                                        if (o == null) {
-                                            console.print("Unable to instantiate\n", ConsoleViewContentType.ERROR_OUTPUT);
-                                            return;
-                                        }
-                                        if (!(o instanceof Runnable)) {
-                                            console.print("Not instance of Runnable\n", ConsoleViewContentType.ERROR_OUTPUT);
-                                            return;
-                                        }
-                                        ((Runnable) o).run();
-                                        errorFree = true;
-                                    } catch (Throwable e) {
-                                        StringWriter sw = new StringWriter();
-                                        e.printStackTrace(new PrintWriter(sw));
-                                        console.print(sw.toString(), ConsoleViewContentType.ERROR_OUTPUT);
-                                    } finally {
-                                        notifyProcessTerminated(errorFree ? 0 : 1);
+                                        break;
                                     }
+                                    if (o == null) {
+                                        console.print("Unable to instantiate\n", ConsoleViewContentType.ERROR_OUTPUT);
+                                        return;
+                                    }
+                                    if (!(o instanceof Runnable)) {
+                                        console.print("Not instance of Runnable\n", ConsoleViewContentType.ERROR_OUTPUT);
+                                        return;
+                                    }
+                                    runnable = (Runnable)o;
+                                    runnableCreatedOrError.countDown();
+                                    runnable.run();
+                                    errorFree = true;
+                                } catch (Throwable e) {
+                                    StringWriter sw = new StringWriter();
+                                    e.printStackTrace(new PrintWriter(sw));
+                                    console.print(sw.toString(), ConsoleViewContentType.ERROR_OUTPUT);
+                                } finally {
+                                    notifyProcessTerminated(errorFree ? 0 : 1);
+                                    runnableCreatedOrError.countDown();
                                 }
-                            });
+                            }
                         }
                     }
                     HackProcessHandler processHandler = new HackProcessHandler();
