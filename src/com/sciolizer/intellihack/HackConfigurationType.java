@@ -31,9 +31,9 @@ import java.io.OutputStream;
 import java.util.Collection;
 
 // First created by Joshua Ball on 12/30/13 at 10:02 PM
-public class HackConfiguraitonType extends ConfigurationTypeBase {
+public class HackConfigurationType extends ConfigurationTypeBase {
     public static final String ID = "com.sciolizer.intellihack";
-    public HackConfiguraitonType() {
+    public HackConfigurationType() {
         super(ID, "IntelliHack", "Runs arbitrary code in the same jvm as IntelliJ", AllIcons.Debugger.StackFrame);
         addFactory(new ConfigurationFactory(this) {
             @Override
@@ -46,6 +46,7 @@ public class HackConfiguraitonType extends ConfigurationTypeBase {
     public class HackRunProfile extends ModuleBasedConfiguration<HackRunConfigurationModule> implements RefactoringListenerProvider {
 
         private String runnableClass = "";
+        private final FullyQualifiedNameGetter fullyQualifiedNameGetter = new FullyQualifiedNameGetter(getProject());
         private final SettingsEditor<HackRunProfile> hackSettingsEditor = new SettingsEditor<HackRunProfile>() {
             private final JPanel jPanel;
             private final JTextArea runnableClassTextArea;
@@ -124,6 +125,14 @@ public class HackConfiguraitonType extends ConfigurationTypeBase {
             getConfigurationModule().writeExternal(element);
         }
 
+        public String getRunnableClass() {
+            return runnableClass;
+        }
+
+        public void setRunnableClass(String runnableClass) {
+            this.runnableClass = runnableClass;
+        }
+
         @Override
         public void checkConfiguration() throws RuntimeConfigurationException {
             if (runnableClass == null || runnableClass.isEmpty()) {
@@ -161,32 +170,19 @@ public class HackConfiguraitonType extends ConfigurationTypeBase {
         @Nullable
         @Override
         public RefactoringElementListener getRefactoringElementListener(PsiElement element) {
-            String fqn = getFullyQualifiedName(element);
+            String fqn = fullyQualifiedNameGetter.getFullyQualifiedName(element);
             if (fqn == null) return null;
             return new RefactoringElementListener() {
                 @Override
                 public void elementMoved(@NotNull PsiElement newElement) {
-                    runnableClass = getFullyQualifiedName(newElement);
+                    runnableClass = fullyQualifiedNameGetter.getFullyQualifiedName(newElement);
                 }
 
                 @Override
                 public void elementRenamed(@NotNull PsiElement newElement) {
-                    runnableClass = getFullyQualifiedName(newElement);
+                    runnableClass = fullyQualifiedNameGetter.getFullyQualifiedName(newElement);
                 }
             };
-        }
-
-        private String getFullyQualifiedName(PsiElement element) {
-            if (!(element instanceof PsiClass)) return null;
-            PsiClass psiClass = (PsiClass) element;
-            PsiIdentifier classIdentifier = psiClass.getNameIdentifier();
-            if (classIdentifier == null) return null;
-            String text = classIdentifier.getText();
-            PsiJavaFile javaFile = (PsiJavaFile) psiClass.getContainingFile();
-            PsiPackage pkg = JavaPsiFacade.getInstance(getProject()).findPackage(javaFile.getPackageName());
-            if (pkg == null) return null;
-            String packageName = pkg.getQualifiedName();
-            return packageName + (packageName.isEmpty() ? "" : '.') + text;
         }
 
         @Nullable

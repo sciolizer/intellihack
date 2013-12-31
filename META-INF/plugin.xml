@@ -37,7 +37,8 @@
   </actions>
 
   <extensions defaultExtensionNs="com.intellij">
-    <configurationType implementation="com.sciolizer.intellihack.HackConfiguraitonType"/>
+    <configurationType implementation="com.sciolizer.intellihack.HackConfigurationType"/>
+    <runConfigurationProducer implementation="com.sciolizer.intellihack.HackRunConfigurationProducer"/>
     <!--<programRunner implementation="com.sciolizer.intellihack.HackProgramRunner"/>-->
     <!-- Add your extensions here -->
   </extensions>
