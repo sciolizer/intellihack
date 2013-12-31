@@ -45,6 +45,7 @@ public class HackClassLoader extends ClassLoader {
     protected Class findClass(String cla) throws ClassNotFoundException {
         String path = cla.replaceAll("\\.", "/") + ".class";
         VirtualFile classFile = getVirtualFile(path);
+        classFile.refresh(false, true);
         if (classFile == null) {
             throw new ClassNotFoundException("Can't find class file: " + cla);
         }
