@@ -5,11 +5,14 @@ import com.intellij.execution.ExecutionException;
 import com.intellij.execution.ExecutionResult;
 import com.intellij.execution.Executor;
 import com.intellij.execution.configurations.*;
+import com.intellij.execution.filters.TextConsoleBuilder;
+import com.intellij.execution.filters.TextConsoleBuilderFactory;
 import com.intellij.execution.process.ProcessHandler;
 import com.intellij.execution.runners.ExecutionEnvironment;
 import com.intellij.execution.runners.ProgramRunner;
 import com.intellij.execution.ui.ConfigurationModuleSelector;
-import com.intellij.execution.ui.ExecutionConsole;
+import com.intellij.execution.ui.ConsoleView;
+import com.intellij.execution.ui.ConsoleViewContentType;
 import com.intellij.icons.AllIcons;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.options.ConfigurationException;
@@ -18,7 +21,9 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.ComboBox;
 import com.intellij.openapi.util.InvalidDataException;
 import com.intellij.openapi.util.WriteExternalException;
-import com.intellij.psi.*;
+import com.intellij.psi.JavaPsiFacade;
+import com.intellij.psi.PsiClass;
+import com.intellij.psi.PsiElement;
 import com.intellij.psi.search.GlobalSearchScope;
 import com.intellij.refactoring.listeners.RefactoringElementListener;
 import org.jdom.Element;
@@ -28,11 +33,20 @@ import org.jetbrains.annotations.Nullable;
 import javax.swing.*;
 import java.awt.event.ActionEvent;
 import java.io.OutputStream;
+import java.io.PrintWriter;
+import java.io.StringWriter;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 // First created by Joshua Ball on 12/30/13 at 10:02 PM
 public class HackConfigurationType extends ConfigurationTypeBase {
     public static final String ID = "com.sciolizer.intellihack";
+    private ExecutorService executor = Executors.newCachedThreadPool();
     public HackConfigurationType() {
         super(ID, "IntelliHack", "Runs arbitrary code in the same jvm as IntelliJ", AllIcons.Debugger.StackFrame);
         addFactory(new ConfigurationFactory(this) {
@@ -187,31 +201,18 @@ public class HackConfigurationType extends ConfigurationTypeBase {
 
         @Nullable
         @Override
-        public RunProfileState getState(@NotNull Executor executor, @NotNull ExecutionEnvironment env) throws ExecutionException {
+        public RunProfileState getState(@NotNull Executor executor, @NotNull final ExecutionEnvironment env) throws ExecutionException {
             System.out.println("getState was called");
             return new RunProfileState() {
+
+                private TextConsoleBuilder myConsoleBuilder = TextConsoleBuilderFactory.getInstance().createBuilder(env.getProject());
+
                 @Nullable
                 @Override
                 public ExecutionResult execute(Executor executor, @NotNull ProgramRunner runner) throws ExecutionException {
                     System.out.println("execute was called");
                     // todo: try using ConsoleViewImpl instead
-                    ExecutionConsole executionConsole = new ExecutionConsole() {
-
-                        JPanel panel = new JPanel();
-
-                        @Override
-                        public JComponent getComponent() {
-                            return panel;
-                        }
-
-                        @Override
-                        public JComponent getPreferredFocusableComponent() {
-                            return panel;
-                        }
-
-                        @Override
-                        public void dispose() { }
-                    };
+                    final ConsoleView console = myConsoleBuilder.getConsole();
                     class HackProcessHandler extends ProcessHandler {
                         @Override
                         protected void destroyProcessImpl() {
@@ -238,26 +239,67 @@ public class HackConfigurationType extends ConfigurationTypeBase {
 
                         @Override
                         public void startNotify() {
-                            System.out.println("startNotify was called");
-                            HackClassLoader hackClassLoader = new HackClassLoader(getProject());
-                            Class thing;
-                            try {
-                                thing = hackClassLoader.findClass(runnableClass);
-                            } catch (ClassNotFoundException e) {
-                                throw new RuntimeException(e);
-                            }
-                            Object o;
-                            try {
-                                o = thing.newInstance();
-                            } catch (InstantiationException e) {
-                                throw new RuntimeException(e);
-                            } catch (IllegalAccessException e) {
-                                throw new RuntimeException(e);
-                            }
-                            ((Runnable) o).run();
+                            super.startNotify();
+                            HackConfigurationType.this.executor.execute(new Runnable() {
+                                @Override
+                                public void run() {
+                                    boolean errorFree = false;
+                                    try {
+                                        HackClassLoader hackClassLoader = new HackClassLoader(getProject());
+                                        Class thing;
+                                        try {
+                                            thing = hackClassLoader.findClass(runnableClass);
+                                        } catch (ClassNotFoundException e) {
+                                            throw new RuntimeException(e);
+                                        }
+                                        Object o = null;
+                                        outer: for (Constructor constructor : thing.getConstructors()) {
+                                            List<Object> objects = new ArrayList<Object>(constructor.getParameterTypes().length);
+                                            for (Class parameterType : constructor.getParameterTypes()) {
+                                                if (parameterType.equals(ConsoleView.class)) {
+                                                    objects.add(console);
+                                                } else if (parameterType.equals(Project.class)) {
+                                                    objects.add(getProject());
+                                                } else {
+                                                    continue outer;
+                                                }
+                                            }
+                                            Object[] initArgs = objects.toArray();
+                                            try {
+                                                o = constructor.newInstance(initArgs);
+                                            } catch (InstantiationException e) {
+                                                throw new RuntimeException(e);
+                                            } catch (IllegalAccessException e) {
+                                                throw new RuntimeException(e);
+                                            } catch (InvocationTargetException e) {
+                                                throw new RuntimeException(e);
+                                            }
+                                            break;
+                                        }
+                                        if (o == null) {
+                                            console.print("Unable to instantiate\n", ConsoleViewContentType.ERROR_OUTPUT);
+                                            return;
+                                        }
+                                        if (!(o instanceof Runnable)) {
+                                            console.print("Not instance of Runnable\n", ConsoleViewContentType.ERROR_OUTPUT);
+                                            return;
+                                        }
+                                        ((Runnable) o).run();
+                                        errorFree = true;
+                                    } catch (Throwable e) {
+                                        StringWriter sw = new StringWriter();
+                                        e.printStackTrace(new PrintWriter(sw));
+                                        console.print(sw.toString(), ConsoleViewContentType.ERROR_OUTPUT);
+                                    } finally {
+                                        notifyProcessTerminated(errorFree ? 0 : 1);
+                                    }
+                                }
+                            });
                         }
                     }
-                    return new DefaultExecutionResult(executionConsole, new HackProcessHandler());
+                    HackProcessHandler processHandler = new HackProcessHandler();
+                    console.attachToProcess(processHandler);
+                    return new DefaultExecutionResult(console, processHandler);
                 }
             };
         }          //  */
