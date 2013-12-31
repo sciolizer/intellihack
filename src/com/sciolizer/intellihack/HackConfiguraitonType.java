@@ -14,6 +14,9 @@ import com.intellij.openapi.module.Module;
 import com.intellij.openapi.options.ConfigurationException;
 import com.intellij.openapi.options.SettingsEditor;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.util.InvalidDataException;
+import com.intellij.openapi.util.WriteExternalException;
+import org.jdom.Element;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -68,6 +71,18 @@ public class HackConfiguraitonType extends ConfigurationTypeBase {
 
         public HackRunProfile(Project project, ConfigurationFactory configurationFactory) {
             super(new HackRunConfigurationModule(project), configurationFactory);
+        }
+
+        @Override
+        public void readExternal(Element element) throws InvalidDataException {
+            runnableClass = element.getChild("runnableClass").getAttribute("class").getValue();
+        }
+
+        @Override
+        public void writeExternal(Element element) throws WriteExternalException {
+            Element child = new Element("runnableClass");
+            child.setAttribute("class", runnableClass);
+            element.addContent(child);
         }
 
         @Override
