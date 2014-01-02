@@ -17,7 +17,7 @@ import com.intellij.openapi.project.Project;
 
 import java.util.concurrent.CountDownLatch;
 
-public class TryMe implements Runnable, AutoCloseable {
+public class TryMe implements Runnable, Closeable {
 
     private final ConsoleView consoleView;
     private final CountDownLatch countDownLatch = new CountDownLatch(1);
@@ -45,7 +45,7 @@ public class TryMe implements Runnable, AutoCloseable {
 }
 ```
 
-Implementing Runnable is mandatory. Implementing AutoCloseable is optional. Constructor arguments
+Implementing Runnable is mandatory. Implementing Closeable is optional. Constructor arguments
 are also optional.
 
 To test this example, copy the file to an IntelliJ plugin project, add an IntelliHack runtime configuration,
